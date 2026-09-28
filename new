@@ -1,0 +1,845 @@
+from flask import Flask, render_template_string
+
+app = Flask(__name__)
+
+HTML = r"""
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Snake — Flask</title>
+  <style>
+    :root{
+      --bg1:#060913;
+      --bg2:#0a1630;
+      --card: rgba(255,255,255,.08);
+      --stroke: rgba(255,255,255,.14);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.68);
+      --accent:#6ee7ff;
+      --accent2:#a78bfa;
+      --ok:#48ff9a;
+      --warn:#ffd36e;
+      --danger:#ff6b6b;
+
+      --cellA: rgba(255,255,255,.05);
+      --cellB: rgba(255,255,255,.02);
+
+      --snake1:#48ff9a;
+      --snake2:#00d4ff;
+      --snakeEye:#061018;
+
+      --fruit:#ff4d6d;
+      --fruitGlow: rgba(255,77,109,.35);
+
+      --wall:#e2e8f0;
+      --wallDark:#94a3b8;
+
+      --shadow: 0 18px 60px rgba(0,0,0,.45);
+    }
+
+    *{ box-sizing:border-box }
+    body{
+      margin:0;
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      color:var(--text);
+      font-family: Segoe UI, Tahoma, Arial, sans-serif;
+      background:
+        radial-gradient(1200px 800px at 18% 10%, rgba(167,139,250,.35), transparent 60%),
+        radial-gradient(900px 700px at 82% 30%, rgba(110,231,255,.28), transparent 55%),
+        linear-gradient(160deg, var(--bg1), var(--bg2));
+    }
+
+    .app{
+      width:min(980px, 96vw);
+      display:grid;
+      grid-template-columns: 1fr 320px;
+      gap:14px;
+      align-items:start;
+    }
+    @media (max-width: 920px){
+      .app{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      background: var(--card);
+      border:1px solid var(--stroke);
+      border-radius:18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      overflow:hidden;
+    }
+
+    .topbar{
+      padding:16px 16px 10px;
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .brand h1{ margin:0; font-size:20px; }
+    .brand .sub{ margin-top:4px; color:var(--muted); font-size:12px; line-height:1.6; }
+
+    .pill{
+      font-size:12px;
+      color:var(--muted);
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.05);
+      padding:6px 10px;
+      border-radius:999px;
+    }
+
+    .gamewrap{
+      padding:14px;
+    }
+
+    canvas{
+      width:100%;
+      height:auto;
+      display:block;
+      border-radius:18px;
+      border:1px solid var(--stroke);
+      background: rgba(0,0,0,.20);
+    }
+
+    .side{
+      padding:16px;
+    }
+
+    .statgrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:8px;
+    }
+    .stat{
+      border:1px solid var(--stroke);
+      background: rgba(0,0,0,.18);
+      border-radius:14px;
+      padding:10px 10px;
+    }
+    .stat .k{ color:var(--muted); font-size:12px; }
+    .stat .v{ font-weight:800; font-size:18px; margin-top:6px; letter-spacing:.2px; }
+
+    .controls{
+      margin-top:12px;
+      border:1px solid var(--stroke);
+      background: rgba(0,0,0,.18);
+      border-radius:14px;
+      padding:12px;
+    }
+    .controls .title{ color:var(--muted); font-size:12px; margin-bottom:10px; }
+
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    button, select{
+      border-radius:14px;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      padding:10px 12px;
+      font-size:14px;
+      outline:none;
+    }
+    button{
+      cursor:pointer;
+      transition: transform .06s ease, filter .15s ease, background .2s ease;
+      background: linear-gradient(135deg, rgba(110,231,255,.16), rgba(167,139,250,.16));
+    }
+    button:hover{ filter: brightness(1.08); }
+    button:active{ transform: translateY(1px); }
+    .btnSecondary{ background: rgba(255,255,255,.06); }
+
+    .msg{
+      margin-top:10px;
+      font-size:13px;
+      color: var(--muted);
+      line-height:1.7;
+    }
+    .msg .ok{ color: var(--ok); }
+    .msg .warn{ color: var(--warn); }
+    .msg .danger{ color: var(--danger); }
+
+    /* Mobile touch D-pad */
+    .dpad{
+      margin-top:12px;
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:10px;
+      user-select:none;
+    }
+    .dpad button{
+      padding:12px 0;
+      font-weight:800;
+    }
+    .dpad .spacer{ visibility:hidden; }
+
+    .footerHint{
+      margin-top:12px;
+      color: var(--muted);
+      font-size:12px;
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    code{
+      background: rgba(255,255,255,.08);
+      border:1px solid var(--stroke);
+      padding:2px 6px;
+      border-radius:8px;
+      color: rgba(255,255,255,.88);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <div class="topbar">
+        <div class="brand">
+          <h1>Snake — مار نوکیا (نسخه حرفه‌ای)</h1>
+          <div class="sub">میوه بخور، بزرگ شو، با موانع و دیوارها بازی کن. کنترل با کیبورد و موبایل. <span class="warn">Space</span> برای Pause.</div>
+        </div>
+        <div class="pill">Flask • تک‌فایل • Port: <code>504</code></div>
+      </div>
+      <div class="gamewrap">
+        <canvas id="c" width="840" height="560"></canvas>
+      </div>
+    </div>
+
+    <div class="card side">
+      <div class="statgrid">
+        <div class="stat">
+          <div class="k">امتیاز</div>
+          <div class="v" id="score">0</div>
+        </div>
+        <div class="stat">
+          <div class="k">بهترین رکورد</div>
+          <div class="v" id="best">0</div>
+        </div>
+        <div class="stat">
+          <div class="k">طول مار</div>
+          <div class="v" id="len">3</div>
+        </div>
+        <div class="stat">
+          <div class="k">سرعت</div>
+          <div class="v" id="spd">1.0×</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="title">تنظیمات و کنترل</div>
+
+        <div class="row">
+          <button onclick="newGame()">شروع/بازی جدید</button>
+          <button class="btnSecondary" onclick="togglePause()">Pause/Resume</button>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label style="font-size:12px;color:var(--muted)">سطح:</label>
+          <select id="level" onchange="applyLevel()">
+            <option value="easy">Easy (موانع کم)</option>
+            <option value="normal" selected>Normal</option>
+            <option value="hard">Hard (موانع زیاد)</option>
+            <option value="nokia">Nokia Classic</option>
+          </select>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label style="font-size:12px;color:var(--muted)">دیوارها:</label>
+          <select id="walls" onchange="applyLevel()">
+            <option value="solid" selected>برخورد = باخت</option>
+            <option value="wrap">عبور از دیوار (Wrap)</option>
+          </select>
+        </div>
+
+        <div class="msg" id="msg">
+          <div>کلیدها: <code>WASD</code> یا <code>Arrow</code> — توقف: <code>Space</code></div>
+          <div>هدف: میوه‌ها را بخور تا بزرگ شوی؛ با دیوار/بدن/مانع برخورد نکنی.</div>
+        </div>
+
+        <div class="dpad" aria-label="controls">
+          <div class="spacer"><button> </button></div>
+          <button onclick="queueDir(0,-1)">↑</button>
+          <div class="spacer"><button> </button></div>
+
+          <button onclick="queueDir(-1,0)">←</button>
+          <button onclick="togglePause()">⏯</button>
+          <button onclick="queueDir(1,0)">→</button>
+
+          <div class="spacer"><button> </button></div>
+          <button onclick="queueDir(0,1)">↓</button>
+          <div class="spacer"><button> </button></div>
+        </div>
+
+        <div class="footerHint">
+          <div>Tip: هر میوه سرعت را کمی بالا می‌برد.</div>
+          <div>Focus: روی صفحه کلیک کن تا کیبورد کار کند.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* حرفه‌ای‌تر از snake ساده:
+   - timestep ثابت برای یکنواختی
+   - queue جهت برای جلوگیری از چرخش ناگهانی
+   - تولید موانع هوشمند (نه روی مار/میوه)
+   - سطح‌ها + حالت Nokia
+   - ذخیره best score در localStorage
+*/
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const ui = {
+  score: document.getElementById('score'),
+  best: document.getElementById('best'),
+  len: document.getElementById('len'),
+  spd: document.getElementById('spd'),
+  msg: document.getElementById('msg'),
+  level: document.getElementById('level'),
+  walls: document.getElementById('walls'),
+};
+
+const GRID = { cols: 30, rows: 20 };  // 30x20 مثل حس نوکیا (مستطیلی)
+let CELL = { w: canvas.width / GRID.cols, h: canvas.height / GRID.rows };
+
+function resizeCanvasToCSS(){
+  // canvas ثابت می‌ماند؛ فقط برای اطمینان نسبت‌ها
+  CELL.w = canvas.width / GRID.cols;
+  CELL.h = canvas.height / GRID.rows;
+}
+resizeCanvasToCSS();
+
+const DIR = {
+  U: {x:0, y:-1},
+  D: {x:0, y:1},
+  L: {x:-1, y:0},
+  R: {x:1, y:0},
+};
+
+function isOpposite(a, b){
+  return a && b && (a.x + b.x === 0) && (a.y + b.y === 0);
+}
+
+function keyOf(p){ return `${p.x},${p.y}`; }
+
+let state;
+
+function loadBest(){
+  const v = Number(localStorage.getItem("snake_best") || "0");
+  return Number.isFinite(v) ? v : 0;
+}
+function saveBest(v){
+  localStorage.setItem("snake_best", String(v));
+}
+
+function setMsg(html){
+  ui.msg.innerHTML = html;
+}
+
+function applyLevel(){
+  if(!state) return;
+  state.level = ui.level.value;
+  state.wallMode = ui.walls.value; // solid | wrap
+  // بازتولید موانع برای سطح جدید، بدون ریست کامل
+  generateObstacles();
+  placeFruit();
+}
+
+function newGame(){
+  const best = loadBest();
+  state = {
+    running: true,
+    paused: false,
+    over: false,
+
+    score: 0,
+    best: best,
+
+    // سرعت پایه: ticks per second
+    baseTPS: 9,    // نرمال
+    tps: 9,
+    speedMult: 1.0,
+
+    level: ui.level.value,
+    wallMode: ui.walls.value,
+
+    snake: [
+      {x: 10, y: 10},
+      {x: 9, y: 10},
+      {x: 8, y: 10},
+    ],
+    dir: DIR.R,
+    dirQueue: [],
+
+    fruit: {x: 18, y: 10},
+    obstacles: new Set(), // set of "x,y"
+    tickAcc: 0,
+    lastTime: performance.now(),
+  };
+
+  generateObstacles();
+  placeFruit();
+  updateHUD();
+
+  setMsg(`
+    <div><span class="ok">بازی شروع شد.</span> با <code>WASD</code> یا <code>Arrow</code> حرکت کن. <code>Space</code> برای توقف.</div>
+    <div>سطح: <code>${state.level}</code> — دیوارها: <code>${state.wallMode}</code></div>
+  `);
+
+  requestAnimationFrame(loop);
+}
+
+function togglePause(){
+  if(!state || state.over) return;
+  state.paused = !state.paused;
+  if(state.paused){
+    setMsg(`<div class="warn">Pause شد.</div><div>برای ادامه دوباره Space یا ⏯ را بزن.</div>`);
+  } else {
+    setMsg(`<div class="ok">ادامه...</div>`);
+  }
+}
+
+function generateObstacles(){
+  if(!state) return;
+  state.obstacles = new Set();
+
+  // تعداد موانع بر اساس سطح
+  let count;
+  if(state.level === "easy") count = 18;
+  else if(state.level === "normal") count = 32;
+  else if(state.level === "hard") count = 50;
+  else if(state.level === "nokia") count = 22; // کلاسیک‌تر و خلوت‌تر
+
+  // الگوی Nokia: چند مانع بلوکی ساده
+  if(state.level === "nokia"){
+    const blocks = [
+      // چند ستون/بلوک
+      {x: 14, y: 3, w: 2, h: 4},
+      {x: 5,  y: 8, w: 3, h: 2},
+      {x: 22, y: 12,w: 3, h: 2},
+      {x: 12, y: 14,w: 2, h: 3},
+    ];
+    for(const b of blocks){
+      for(let dy=0; dy<b.h; dy++){
+        for(let dx=0; dx<b.w; dx++){
+          addObstacle({x:b.x+dx, y:b.y+dy});
+        }
+      }
+    }
+    // کمی مانع رندوم هم
+    count = Math.max(0, count - state.obstacles.size);
+  }
+
+  let tries = 0;
+  while(state.obstacles.size < (state.obstacles.size + count) && tries < 20000){
+    tries++;
+    const p = { x: randInt(0, GRID.cols-1), y: randInt(0, GRID.rows-1) };
+
+    // ناحیه امن اطراف شروع
+    if(distanceManhattan(p, state.snake[0]) <= 5) continue;
+
+    // روی مار نیافتد
+    if(onSnake(p)) continue;
+
+    addObstacle(p);
+
+    // در سطح hard، گاهی "دوتایی" می‌سازیم که حس مانع واقعی‌تر بدهد
+    if(state.level === "hard" && Math.random() < 0.30){
+      const neighbor = [{x:p.x+1,y:p.y},{x:p.x-1,y:p.y},{x:p.x,y:p.y+1},{x:p.x,y:p.y-1}]
+        .filter(q => q.x>=0 && q.x<GRID.cols && q.y>=0 && q.y<GRID.rows);
+      if(neighbor.length){
+        const q = neighbor[randInt(0, neighbor.length-1)];
+        if(!onSnake(q) && distanceManhattan(q, state.snake[0]) > 4) addObstacle(q);
+      }
+    }
+
+    // توقف زمانی که تعداد به حد مطلوب رسید (برای حالت غیر-nokia)
+    if(state.level !== "nokia"){
+      // هدف count موانع
+      if(state.obstacles.size >= count) break;
+    }else{
+      // در نوکیا بلوک‌ها + رندوم به حد count برسد
+      const target = 22; // مقدار تقریبی
+      if(state.obstacles.size >= target) break;
+    }
+  }
+
+  // مطمئن شو میوه روی مانع نیفتد
+  if(state.obstacles.has(keyOf(state.fruit))){
+    placeFruit();
+  }
+}
+
+function addObstacle(p){
+  // روی میوه و سر مار و... نگذار
+  if(p.x<0 || p.x>=GRID.cols || p.y<0 || p.y>=GRID.rows) return;
+  if(onSnake(p)) return;
+  if(p.x === state.fruit.x && p.y === state.fruit.y) return;
+  state.obstacles.add(keyOf(p));
+}
+
+function placeFruit(){
+  let tries = 0;
+  while(tries < 20000){
+    tries++;
+    const p = { x: randInt(0, GRID.cols-1), y: randInt(0, GRID.rows-1) };
+    if(onSnake(p)) continue;
+    if(state.obstacles.has(keyOf(p))) continue;
+    state.fruit = p;
+    return;
+  }
+  // اگر خیلی پر شد (نادر) بازی را برده حساب کن
+  gameOver(true);
+}
+
+function onSnake(p){
+  for(const s of state.snake){
+    if(s.x === p.x && s.y === p.y) return true;
+  }
+  return false;
+}
+
+function distanceManhattan(a, b){
+  return Math.abs(a.x-b.x) + Math.abs(a.y-b.y);
+}
+
+function queueDir(dx, dy){
+  if(!state || state.over) return;
+  const nd = {x:dx, y:dy};
+  const last = state.dirQueue.length ? state.dirQueue[state.dirQueue.length-1] : state.dir;
+
+  // جلوگیری از برگشت مستقیم
+  if(isOpposite(last, nd)) return;
+
+  // محدودیت صف برای کنترل دقیق
+  if(state.dirQueue.length < 2){
+    state.dirQueue.push(nd);
+  }
+}
+
+window.addEventListener("keydown", (e) => {
+  if(!state) return;
+
+  const k = e.key.toLowerCase();
+  if(k === " "){
+    e.preventDefault();
+    togglePause();
+    return;
+  }
+
+  if(state.paused || state.over) return;
+
+  if(k === "arrowup" || k === "w") { e.preventDefault(); queueDir(0,-1); }
+  else if(k === "arrowdown" || k === "s") { e.preventDefault(); queueDir(0,1); }
+  else if(k === "arrowleft" || k === "a") { e.preventDefault(); queueDir(-1,0); }
+  else if(k === "arrowright" || k === "d") { e.preventDefault(); queueDir(1,0); }
+});
+
+function loop(now){
+  if(!state || !state.running) return;
+
+  const dt = (now - state.lastTime) / 1000;
+  state.lastTime = now;
+
+  draw();
+
+  if(state.paused || state.over){
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  // ticks ثابت
+  const tps = state.tps;
+  state.tickAcc += dt;
+
+  const step = 1 / tps;
+  // برای جلوگیری از spiral of death
+  const maxSteps = 5;
+  let steps = 0;
+
+  while(state.tickAcc >= step && steps < maxSteps){
+    tick();
+    state.tickAcc -= step;
+    steps++;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+function tick(){
+  // اعمال جهت صف
+  if(state.dirQueue.length){
+    const nd = state.dirQueue.shift();
+    if(!isOpposite(state.dir, nd)) state.dir = nd;
+  }
+
+  const head = state.snake[0];
+  let nx = head.x + state.dir.x;
+  let ny = head.y + state.dir.y;
+
+  // دیوارها
+  if(state.wallMode === "wrap"){
+    nx = (nx + GRID.cols) % GRID.cols;
+    ny = (ny + GRID.rows) % GRID.rows;
+  } else {
+    if(nx < 0 || nx >= GRID.cols || ny < 0 || ny >= GRID.rows){
+      gameOver(false, "wall");
+      return;
+    }
+  }
+
+  const newHead = {x:nx, y:ny};
+
+  // برخورد با مانع
+  if(state.obstacles.has(keyOf(newHead))){
+    gameOver(false, "obstacle");
+    return;
+  }
+
+  // برخورد با بدن: اگر به انتها می‌رویم و قرار است tail حذف شود، اجازه می‌دهیم
+  // اما ساده و کلاسیک: هر برخورد با بدن = باخت (نزدیک نوکیا)
+  for(let i=0;i<state.snake.length;i++){
+    const s = state.snake[i];
+    if(s.x === newHead.x && s.y === newHead.y){
+      gameOver(false, "self");
+      return;
+    }
+  }
+
+  // حرکت
+  state.snake.unshift(newHead);
+
+  // خوردن میوه
+  if(newHead.x === state.fruit.x && newHead.y === state.fruit.y){
+    state.score += 10;
+    // سرعت افزایش تدریجی (کنترل‌شده)
+    state.speedMult = Math.min(2.2, state.speedMult + 0.03);
+    state.tps = Math.round(state.baseTPS * state.speedMult);
+
+    // در Hard گاهی یک مانع جدید اضافه کن (چالش)
+    if(state.level === "hard" && Math.random() < 0.35){
+      spawnObstacleNearFruit();
+    }
+    placeFruit();
+    updateHUD();
+  } else {
+    // اگر میوه نخورد، دم را کوتاه کن
+    state.snake.pop();
+  }
+}
+
+function spawnObstacleNearFruit(){
+  // مانع جدید نزدیک میوه اما نه روی مسیر فوری سر مار
+  const base = state.fruit;
+  const candidates = [];
+  for(let dy=-2; dy<=2; dy++){
+    for(let dx=-2; dx<=2; dx++){
+      if(Math.abs(dx)+Math.abs(dy) < 2) continue;
+      const p = {x: base.x+dx, y: base.y+dy};
+      if(p.x<0 || p.x>=GRID.cols || p.y<0 || p.y>=GRID.rows) continue;
+      if(onSnake(p)) continue;
+      if(p.x === state.fruit.x && p.y === state.fruit.y) continue;
+      if(state.obstacles.has(keyOf(p))) continue;
+      // دور از سر مار
+      if(distanceManhattan(p, state.snake[0]) <= 2) continue;
+      candidates.push(p);
+    }
+  }
+  if(candidates.length){
+    addObstacle(candidates[randInt(0, candidates.length-1)]);
+  }
+}
+
+function gameOver(win=false, reason=""){
+  state.over = True = true; // keep js happy with boolean
+  state.paused = false;
+
+  // best
+  if(state.score > state.best){
+    state.best = state.score;
+    saveBest(state.best);
+  }
+  updateHUD();
+
+  let text;
+  if(win){
+    text = `<div class="ok">تو بردی! زمین پر شد.</div><div>امتیاز: <code>${state.score}</code></div>`;
+  } else {
+    let why = "";
+    if(reason === "wall") why = "برخورد با دیوار";
+    else if(reason === "self") why = "برخورد با بدن";
+    else if(reason === "obstacle") why = "برخورد با مانع";
+    text = `<div class="danger">Game Over — ${why}</div><div>برای شروع دوباره «بازی جدید» را بزن.</div>`;
+  }
+  setMsg(text);
+}
+
+function updateHUD(){
+  ui.score.textContent = state.score;
+  ui.best.textContent = state.best;
+  ui.len.textContent = state.snake.length;
+  ui.spd.textContent = (state.speedMult).toFixed(2) + "×";
+}
+
+function draw(){
+  // پس‌زمینه شطرنجی
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+
+  // grid background
+  for(let y=0;y<GRID.rows;y++){
+    for(let x=0;x<GRID.cols;x++){
+      ctx.fillStyle = ((x+y)%2===0) ? "rgba(255,255,255,.035)" : "rgba(255,255,255,.018)";
+      ctx.fillRect(x*CELL.w, y*CELL.h, CELL.w, CELL.h);
+    }
+  }
+
+  // Obstacles
+  for(const k of state.obstacles){
+    const [x,y] = k.split(",").map(Number);
+    drawRoundedCell(x,y, "rgba(226,232,240,.70)", "rgba(148,163,184,.25)");
+  }
+
+  // Fruit (glow + circle)
+  const fx = state.fruit.x, fy = state.fruit.y;
+  const cx = fx*CELL.w + CELL.w/2;
+  const cy = fy*CELL.h + CELL.h/2;
+  ctx.save();
+  ctx.shadowColor = "rgba(255,77,109,.45)";
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = "rgba(255,77,109,.95)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, Math.min(CELL.w, CELL.h)*0.30, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  // Snake (head gradient + body)
+  for(let i=state.snake.length-1; i>=0; i--){
+    const s = state.snake[i];
+    const t = i / Math.max(1, state.snake.length-1);
+
+    const col = lerpColor([72,255,154], [0,212,255], t);
+    const fill = `rgba(${col[0]},${col[1]},${col[2]},.95)`;
+    const stroke = `rgba(255,255,255,.10)`;
+
+    drawRoundedCell(s.x, s.y, fill, stroke);
+
+    if(i === 0){
+      // Eyes (جهت‌دار)
+      drawEyes(s, state.dir);
+    }
+  }
+
+  // overlay: paused/over
+  if(state.paused || state.over){
+    ctx.fillStyle = "rgba(0,0,0,.35)";
+    ctx.fillRect(0,0,w,h);
+    ctx.fillStyle = "rgba(255,255,255,.92)";
+    ctx.font = "700 30px Segoe UI, Tahoma, Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(state.over ? "GAME OVER" : "PAUSED", w/2, h/2 - 10);
+
+    ctx.fillStyle = "rgba(255,255,255,.70)";
+    ctx.font = "400 14px Segoe UI, Tahoma, Arial";
+    ctx.fillText("Space یا ⏯ برای ادامه / بازی جدید", w/2, h/2 + 20);
+  }
+}
+
+function drawRoundedCell(x, y, fill, stroke){
+  const px = x*CELL.w, py = y*CELL.h;
+  const pad = Math.min(CELL.w, CELL.h)*0.10;
+  const rx = px + pad, ry = py + pad;
+  const rw = CELL.w - pad*2, rh = CELL.h - pad*2;
+  const r = Math.min(rw, rh)*0.25;
+
+  roundRect(rx, ry, rw, rh, r, fill, stroke);
+}
+
+function roundRect(x, y, w, h, r, fill, stroke){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+  if(fill){
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if(stroke){
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
+function drawEyes(head, dir){
+  const px = head.x*CELL.w, py = head.y*CELL.h;
+  const cx = px + CELL.w/2;
+  const cy = py + CELL.h/2;
+
+  // offset in direction
+  const off = Math.min(CELL.w, CELL.h) * 0.10;
+  const ex = dir.x * off;
+  const ey = dir.y * off;
+
+  const eyeSep = Math.min(CELL.w, CELL.h) * 0.12;
+  const eyeR = Math.min(CELL.w, CELL.h) * 0.06;
+
+  // perpendicular vector
+  const perp = {x: -dir.y, y: dir.x};
+
+  const e1 = { x: cx + ex + perp.x*eyeSep, y: cy + ey + perp.y*eyeSep };
+  const e2 = { x: cx + ex - perp.x*eyeSep, y: cy + ey - perp.y*eyeSep };
+
+  ctx.save();
+  ctx.fillStyle = "rgba(6,16,24,.85)";
+  ctx.beginPath(); ctx.arc(e1.x, e1.y, eyeR, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(e2.x, e2.y, eyeR, 0, Math.PI*2); ctx.fill();
+
+  // tiny highlight
+  ctx.fillStyle = "rgba(255,255,255,.55)";
+  ctx.beginPath(); ctx.arc(e1.x-1, e1.y-1, eyeR*0.35, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(e2.x-1, e2.y-1, eyeR*0.35, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function lerpColor(a, b, t){
+  return [
+    Math.round(a[0] + (b[0]-a[0]) * t),
+    Math.round(a[1] + (b[1]-a[1]) * t),
+    Math.round(a[2] + (b[2]-a[2]) * t),
+  ];
+}
+
+function randInt(min, max){
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// شروع خودکار با تنظیمات فعلی
+(function init(){
+  ui.best.textContent = loadBest();
+  setMsg(`<div>برای شروع «بازی جدید» را بزن.</div><div>اگر کیبورد کار نکرد، یک‌بار روی برد کلیک کن.</div>`);
+  // کلیک روی canvas فوکوس می‌دهد
+  canvas.addEventListener("pointerdown", () => canvas.focus?.());
+})();
+</script>
+</body>
+</html>
+"""
+
+@app.route("/")
+def home():
+    return render_template_string(HTML)
+
+if __name__ == "__main__":
+    # اجرا روی پورت 504 طبق درخواست
+    app.run(host="127.0.0.1", port=504, debug=False)
